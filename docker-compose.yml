@@ -1,0 +1,125 @@
+services:
+
+  postgresql:
+    image: pgvector/pgvector:pg16
+    container_name: lobe-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: lobechat
+      POSTGRES_PASSWORD: lobechat123
+      POSTGRES_USER: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lobechat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  logto:
+    image: svhd/logto:latest
+    container_name: lobe-logto
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      TRUST_PROXY_HEADER: "1"
+      DB_URL: "postgresql://postgres:lobechat123@postgresql:5432/logto"
+      ENDPOINT: "http://logto:3002"
+      ADMIN_ENDPOINT: "http://logto:3001"
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+
+  minio:
+    image: minio/minio:latest
+    container_name: lobe-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: lobe-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      mc mb --ignore-existing myminio/lobe;
+      mc anonymous set public myminio/lobe;
+      echo 'Bucket lobe created!';
+      "
+
+  lobechat:
+    image: lobehub/lobe-chat-database:latest
+    container_name: lobe-chat
+    restart: unless-stopped
+    ports:
+      - "3210:3210"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      logto:
+        condition: service_started
+    environment:
+      # URL
+      APP_URL: "http://localhost:3210"
+      NEXTAUTH_URL: "http://localhost:3210/api/auth"
+
+      # Database
+      DATABASE_URL: "postgresql://postgres:lobechat123@postgresql:5432/lobechat"
+      KEY_VAULTS_SECRET: "lobechat-secret-key-windows-2025!!"
+
+      NEXT_AUTH_SECRET: "nextauth-secret-key-windows-2025!!"
+
+      # Logto SSO Auth (cần cập nhật CLIENT_ID và CLIENT_SECRET sau khi cấu hình Logto)
+      NEXT_AUTH_SSO_PROVIDERS: "logto"
+      AUTH_LOGTO_ID: "lobechat-app"
+      AUTH_LOGTO_SECRET: "kLPFa3mSfYhBQ4AgwdvuXTDGzb9cVp0K"
+      AUTH_LOGTO_ISSUER: "http://logto:3002/oidc"
+      LOGTO_WEBHOOK_SIGNING_KEY: "logto-webhook-key-2025"
+
+      # MinIO / S3
+      S3_ENDPOINT: "http://minio:9000"
+      S3_BUCKET: "lobe"
+      S3_ACCESS_KEY_ID: "minioadmin"
+      S3_SECRET_ACCESS_KEY: "minioadmin123"
+      S3_PUBLIC_DOMAIN: "http://minio:9000"
+      S3_ENABLE_PATH_STYLE: "1"
+
+      # Ollama - LLM
+      ENABLED_OLLAMA: "1"
+      OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
+
+      # Ollama - Embedding
+      EMBEDDING_MODEL_PROVIDER: "ollama"
+      DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
+
+      # OpenAI proxy -> Ollama (fallback cho embedding)
+      OPENAI_API_KEY: "ollama"
+      OPENAI_PROXY_URL: "http://host.docker.internal:11434/v1"
+
+volumes:
+  postgres_data:
+  minio_data:
