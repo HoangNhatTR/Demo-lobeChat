@@ -35,6 +35,36 @@ services:
       ADMIN_ENDPOINT: "http://logto:3001"
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
 
+  logto-init:
+    image: pgvector/pgvector:pg16
+    container_name: lobe-logto-init
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      logto:
+        condition: service_started
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for Logto schema..."
+        for i in $$(seq 1 30); do
+          if psql -U postgres -h postgresql -d logto -tc "SELECT 1 FROM information_schema.tables WHERE table_name = 'applications'" 2>/dev/null | grep -q 1; then
+            echo "Logto schema ready!"
+            break
+          fi
+          echo "  Waiting... ($$i/30)"
+          sleep 2
+        done
+        echo "Inserting LobeChat app..."
+        psql -U postgres -h postgresql -d logto -f /tmp/init-logto.sql
+        echo "Done!"
+    environment:
+      PGPASSWORD: "lobechat123"
+    volumes:
+      - ./init-logto.sql:/tmp/init-logto.sql:ro
+
   minio:
     image: minio/minio:latest
     container_name: lobe-minio
