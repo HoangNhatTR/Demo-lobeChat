@@ -144,7 +144,8 @@ services:
 
       # Ollama - Embedding
       EMBEDDING_MODEL_PROVIDER: "ollama"
-      DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
+      # DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
+      DEFAULT_EMBEDDING_MODEL: "text-embedding-3-small"
 
       # OpenAI proxy -> Ollama (fallback cho embedding)
       OPENAI_API_KEY: "ollama"
