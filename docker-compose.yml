@@ -144,12 +144,70 @@ services:
 
       # Ollama - Embedding
       EMBEDDING_MODEL_PROVIDER: "ollama"
-      # DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
-      DEFAULT_EMBEDDING_MODEL: "text-embedding-3-small"
+      DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
 
-      # OpenAI proxy -> Ollama (fallback cho embedding)
+      # OpenAI proxy -> Ollama (nếu cần dùng OpenAI provider trong UI)
       OPENAI_API_KEY: "ollama"
       OPENAI_PROXY_URL: "http://host.docker.internal:11434/v1"
+
+  db-init:
+    image: pgvector/pgvector:pg16
+    container_name: lobe-db-init
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      lobechat:
+        condition: service_started
+    restart: "no"
+    environment:
+      PGPASSWORD: "lobechat123"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for LobeChat to create embeddings table..."
+        for i in $$(seq 1 90); do
+          if psql -U postgres -h postgresql -d lobechat -tc "SELECT 1 FROM information_schema.tables WHERE table_name = 'embeddings'" 2>/dev/null | grep -q 1; then
+            echo "Embeddings table found!"
+            break
+          fi
+          if [ $$i -eq 90 ]; then
+            echo "Timeout waiting for embeddings table. Will fix on next restart."
+            exit 0
+          fi
+          echo "  Waiting... ($$i/90)"
+          sleep 2
+        done
+        echo "Fixing vector dimension to 768 for nomic-embed-text..."
+        psql -U postgres -h postgresql -d lobechat -c "
+        DO \$$\$$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'embeddings' AND column_name = 'embeddings'
+            AND udt_name = 'vector'
+          ) THEN
+            DELETE FROM embeddings WHERE vector_dims(embeddings) != 768 OR embeddings IS NULL;
+            ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(768);
+            RAISE NOTICE 'Embeddings column set to vector(768)';
+          END IF;
+        END \$$\$$;
+        "
+        echo "Fixing similarity column type..."
+        psql -U postgres -h postgresql -d lobechat -c "
+        DO \$$\$$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'message_query_chunks' AND column_name = 'similarity'
+            AND data_type = 'numeric'
+          ) THEN
+            ALTER TABLE message_query_chunks ALTER COLUMN similarity TYPE double precision;
+            RAISE NOTICE 'Similarity column changed to double precision';
+          END IF;
+        END \$$\$$;
+        "
+        echo "Database fix complete!"
 
 volumes:
   postgres_data:

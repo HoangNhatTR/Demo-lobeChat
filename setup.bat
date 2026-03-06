@@ -37,15 +37,7 @@ echo [STEP] Pulling Ollama models...
 ollama pull nomic-embed-text
 ollama pull llama3.1
 
-REM --- Step 4: Create text-embedding-3-small alias ---
-echo.
-echo [STEP] Creating text-embedding-3-small alias...
-if not exist Modelfile-embedding (
-    echo FROM nomic-embed-text > Modelfile-embedding
-)
-ollama create text-embedding-3-small -f Modelfile-embedding
-
-REM --- Step 5: Add hosts entries ---
+REM --- Step 4: Add hosts entries ---
 echo.
 echo [STEP] Adding hosts entries (requires Administrator)...
 findstr /C:"logto" C:\Windows\System32\drivers\etc\hosts >nul 2>&1
@@ -64,33 +56,24 @@ if %errorlevel% neq 0 (
     echo [SKIP] minio already in hosts
 )
 
-REM --- Step 6: Start Docker services ---
+REM --- Step 5: Start Docker services ---
 echo.
 echo [STEP] Starting Docker services...
 docker compose up -d
 
-REM --- Step 7: Wait for services to be healthy ---
+REM --- Step 6: Wait for services to initialize ---
 echo.
-echo [STEP] Waiting for PostgreSQL to be ready...
-:wait_pg
-docker exec lobe-postgres pg_isready -U postgres -d lobechat >nul 2>&1
-if %errorlevel% neq 0 (
-    timeout /t 3 /nobreak >nul
-    goto wait_pg
+echo [STEP] Waiting for all services to initialize...
+echo   Database dimension fix will run automatically (lobe-db-init container).
+timeout /t 30 /nobreak >nul
+
+REM Check if db-init completed
+docker logs lobe-db-init 2>&1 | findstr /C:"Database fix complete" >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Database initialization complete!
+) else (
+    echo [INFO] Database init may still be running. Check with: docker logs lobe-db-init
 )
-echo [OK] PostgreSQL is ready
-
-REM --- Step 8: Run DB init script ---
-echo.
-echo [STEP] Running database initialization...
-docker cp init-db.sh lobe-postgres:/tmp/init-db.sh
-docker exec lobe-postgres chmod +x /tmp/init-db.sh
-docker exec lobe-postgres bash /tmp/init-db.sh
-
-REM --- Step 9: Restart LobeChat to pick up DB changes ---
-echo.
-echo [STEP] Restarting LobeChat...
-docker compose restart lobechat
 
 echo.
 echo ============================================
@@ -102,9 +85,5 @@ echo  MinIO Console:  http://localhost:9001
 echo  Logto Admin:    http://localhost:3001
 echo.
 echo  First time: Register a new account at LobeChat login page.
-echo.
-echo  NOTE: If Knowledge Base vectorization fails on first try,
-echo        wait 30 seconds and run:
-echo        docker compose restart lobechat
 echo.
 pause

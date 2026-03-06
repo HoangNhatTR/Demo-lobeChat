@@ -34,15 +34,7 @@ echo "[STEP] Pulling Ollama models..."
 ollama pull nomic-embed-text
 ollama pull llama3.1
 
-# --- Step 4: Create text-embedding-3-small alias ---
-echo ""
-echo "[STEP] Creating text-embedding-3-small alias..."
-if [ ! -f Modelfile-embedding ]; then
-    echo "FROM nomic-embed-text" > Modelfile-embedding
-fi
-ollama create text-embedding-3-small -f Modelfile-embedding
-
-# --- Step 5: Add hosts entries ---
+# --- Step 4: Add hosts entries ---
 echo ""
 echo "[STEP] Adding hosts entries..."
 if ! grep -q "logto" /etc/hosts; then
@@ -59,30 +51,25 @@ else
     echo "[SKIP] minio already in hosts"
 fi
 
-# --- Step 6: Start Docker services ---
+# --- Step 5: Start Docker services ---
 echo ""
 echo "[STEP] Starting Docker services..."
 docker compose up -d
 
-# --- Step 7: Wait for PostgreSQL ---
+# --- Step 6: Wait for services to initialize ---
 echo ""
-echo "[STEP] Waiting for PostgreSQL to be ready..."
-until docker exec lobe-postgres pg_isready -U postgres -d lobechat > /dev/null 2>&1; do
-    sleep 3
+echo "[STEP] Waiting for all services to initialize..."
+echo "  Database dimension fix will run automatically (lobe-db-init container)."
+for i in $(seq 1 30); do
+    if docker logs lobe-db-init 2>&1 | grep -q "Database fix complete"; then
+        echo "[OK] Database initialization complete!"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "[INFO] Database init may still be running. Check with: docker logs lobe-db-init"
+    fi
+    sleep 2
 done
-echo "[OK] PostgreSQL is ready"
-
-# --- Step 8: Run DB init script ---
-echo ""
-echo "[STEP] Running database initialization..."
-docker cp init-db.sh lobe-postgres:/tmp/init-db.sh
-docker exec lobe-postgres chmod +x /tmp/init-db.sh
-docker exec lobe-postgres bash /tmp/init-db.sh
-
-# --- Step 9: Restart LobeChat ---
-echo ""
-echo "[STEP] Restarting LobeChat..."
-docker compose restart lobechat
 
 echo ""
 echo "============================================"
