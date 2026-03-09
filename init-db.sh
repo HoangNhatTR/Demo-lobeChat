@@ -46,7 +46,7 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
-echo "=== Fixing vector dimension (1024 -> 768 for nomic-embed-text) ==="
+echo "=== Fixing vector dimension to 1024 for bge-m3 ==="
 psql -U postgres -d lobechat -c "
 DO \$\$
 BEGIN
@@ -57,9 +57,9 @@ BEGIN
     AND udt_name = 'vector'
   ) THEN
     -- Delete any existing embeddings with wrong dimensions
-    DELETE FROM embeddings WHERE vector_dims(embeddings) != 768 OR embeddings IS NULL;
-    ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(768);
-    RAISE NOTICE 'Embeddings column set to vector(768)';
+    DELETE FROM embeddings WHERE vector_dims(embeddings) != 1024 OR embeddings IS NULL;
+    ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(1024);
+    RAISE NOTICE 'Embeddings column set to vector(1024)';
   END IF;
 END \$\$;
 "

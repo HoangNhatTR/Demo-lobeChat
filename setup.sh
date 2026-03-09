@@ -31,7 +31,7 @@ echo "[OK] Ollama found"
 # --- Step 3: Pull Ollama models ---
 echo ""
 echo "[STEP] Pulling Ollama models..."
-ollama pull nomic-embed-text
+ollama pull bge-m3
 ollama pull llama3.1
 
 # --- Step 4: Add hosts entries ---

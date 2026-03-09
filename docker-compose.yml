@@ -140,15 +140,15 @@ services:
 
       # Ollama - LLM
       ENABLED_OLLAMA: "1"
-      OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
+      # OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
+      OLLAMA_PROXY_URL: "http://192.168.3.7:11434"
 
-      # Ollama - Embedding
-      EMBEDDING_MODEL_PROVIDER: "ollama"
-      DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
+      # Ollama - Embedding (format: embedding_model=provider/model)
+      DEFAULT_FILES_CONFIG: "embedding_model=ollama/bge-m3"
 
       # OpenAI proxy -> Ollama (nếu cần dùng OpenAI provider trong UI)
       OPENAI_API_KEY: "ollama"
-      OPENAI_PROXY_URL: "http://host.docker.internal:11434/v1"
+      OPENAI_PROXY_URL: "http://192.168.3.7:11434/v1"
 
   db-init:
     image: pgvector/pgvector:pg16
@@ -178,7 +178,7 @@ services:
           echo "  Waiting... ($$i/90)"
           sleep 2
         done
-        echo "Fixing vector dimension to 768 for nomic-embed-text..."
+        echo "Fixing vector dimension to 1024 for bge-m3..."
         psql -U postgres -h postgresql -d lobechat -c "
         DO \$$\$$
         BEGIN
@@ -187,9 +187,9 @@ services:
             WHERE table_name = 'embeddings' AND column_name = 'embeddings'
             AND udt_name = 'vector'
           ) THEN
-            DELETE FROM embeddings WHERE vector_dims(embeddings) != 768 OR embeddings IS NULL;
-            ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(768);
-            RAISE NOTICE 'Embeddings column set to vector(768)';
+            DELETE FROM embeddings WHERE vector_dims(embeddings) != 1024 OR embeddings IS NULL;
+            ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(1024);
+            RAISE NOTICE 'Embeddings column set to vector(1024)';
           END IF;
         END \$$\$$;
         "

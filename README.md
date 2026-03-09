@@ -56,7 +56,7 @@ lobechat/
 #### Bước 1 — Cài Ollama models
 
 ```bash
-ollama pull nomic-embed-text
+ollama pull bge-m3
 ollama pull llama3.1
 ollama create text-embedding-3-small -f Modelfile-embedding
 ```
@@ -133,7 +133,7 @@ Lần đầu truy cập LobeChat, bạn sẽ được chuyển đến trang đă
 ### Lỗi vectorization / embedding
 
 → Kiểm tra Ollama đang chạy: `ollama list`
-→ Đảm bảo model `nomic-embed-text` đã được pull
+→ Đảm bảo model `bge-m3` đã được pull
 
 ### Lỗi "similarity: null"
 
@@ -215,9 +215,8 @@ ollama pull mxbai-embed-large
 Mở file `docker-compose.yml`, tìm phần `lobechat` → `environment`, sửa:
 
 ```yaml
-# Ollama - Embedding
-EMBEDDING_MODEL_PROVIDER: "ollama"
-DEFAULT_EMBEDDING_MODEL: "mxbai-embed-large"    # ← đổi tên model ở đây
+# Ollama - Embedding (format: embedding_model=provider/model)
+DEFAULT_FILES_CONFIG: "embedding_model=ollama/mxbai-embed-large"    # ← đổi model ở đây
 ```
 
 Tiếp theo, tìm phần `db-init` → `entrypoint`, sửa **vector dimension** cho phù hợp với model mới:
@@ -252,11 +251,11 @@ Sau đó vào LobeChat → Knowledge Base → upload lại file hoặc nhấn **
 
 | Model | Vector Dimension | Kích thước | Ghi chú |
 |-------|:----------------:|-----------|---------|
-| `nomic-embed-text` | **768** | 274 MB | ✅ Model mặc định, cân bằng tốt |
+| `nomic-embed-text` | **768** | 274 MB | Cân bằng tốt |
 | `mxbai-embed-large` | **1024** | 670 MB | Chất lượng cao hơn |
 | `snowflake-arctic-embed` | **1024** | 670 MB | Tốt cho search |
 | `all-minilm` | **384** | 45 MB | Rất nhẹ, phù hợp máy yếu |
-| `bge-m3` | **1024** | 1.2 GB | Đa ngôn ngữ, tốt cho tiếng Việt |
+| `bge-m3` | **1024** | 1.2 GB | ✅ Model mặc định, đa ngôn ngữ, tốt cho tiếng Việt |
 | `bge-large` | **1024** | 670 MB | BAAI, chất lượng cao |
 
 > ⚠️ **Quan trọng**: Mỗi model embedding có vector dimension khác nhau. Khi đổi model, **bắt buộc** phải cập nhật dimension trong database và xóa embeddings cũ, nếu không sẽ gặp lỗi.
@@ -291,8 +290,8 @@ docker compose up -d
 Sửa `docker-compose.yml`:
 
 ```yaml
-EMBEDDING_MODEL_PROVIDER: "openai"
-DEFAULT_EMBEDDING_MODEL: "text-embedding-3-small"
+# Dùng OpenAI embedding thay Ollama
+DEFAULT_FILES_CONFIG: "embedding_model=openai/text-embedding-3-small"
 OPENAI_API_KEY: "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
 OPENAI_PROXY_URL: "https://api.openai.com/v1"
 ```
