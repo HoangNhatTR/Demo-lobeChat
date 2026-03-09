@@ -153,22 +153,182 @@ docker logs lobe-logto --tail 50
 
 ## Cấu hình nâng cao
 
-### Đổi model LLM
+---
 
-Trong LobeChat UI: Settings > Model Provider > chọn model Ollama khác.
+### 🤖 Đổi Model LLM (Chat)
 
-### Đổi model Embedding
+#### Cách 1: Đổi trong giao diện LobeChat (khuyến nghị)
 
-Sửa `DEFAULT_EMBEDDING_MODEL` trong `docker-compose.yml`.
-**Lưu ý**: Nếu đổi model embedding, cần xóa embeddings cũ và re-vectorize:
+1. Truy cập **LobeChat** tại `http://localhost:3210`
+2. Vào **Settings** (biểu tượng bánh răng) → **Language Model** → **Ollama**
+3. Chọn model mong muốn từ danh sách (LobeChat tự detect các model đã pull trong Ollama)
+4. Nhấn **Save**
 
-```sql
-docker exec lobe-postgres psql -U postgres -d lobechat -c "DELETE FROM embeddings;"
+> Cách này **không cần restart** bất kỳ service nào.
+
+#### Cách 2: Pull model mới từ Ollama rồi dùng trong UI
+
+```bash
+# Xem danh sách model đang có
+ollama list
+
+# Pull model mới (ví dụ)
+ollama pull gemma2
+ollama pull mistral
+ollama pull phi3
+ollama pull qwen2
+ollama pull deepseek-r1
 ```
 
-Và cập nhật vector dimension cho phù hợp.
+Sau khi pull xong, vào LobeChat UI → Settings → Language Model → Ollama, model mới sẽ tự xuất hiện.
 
-### Sử dụng trên mạng LAN
+#### Một số model LLM phổ biến trên Ollama
+
+| Model | Kích thước | RAM tối thiểu | Ghi chú |
+|-------|-----------|---------------|---------|
+| `llama3.1` | 4.7 GB | 8 GB | Model mặc định, cân bằng tốc độ/chất lượng |
+| `llama3.1:70b` | 40 GB | 48 GB | Chất lượng cao, cần GPU mạnh |
+| `gemma2` | 5.4 GB | 8 GB | Google, tốt cho tiếng Anh |
+| `mistral` | 4.1 GB | 8 GB | Nhanh, nhẹ |
+| `phi3` | 2.2 GB | 4 GB | Microsoft, rất nhẹ |
+| `qwen2` | 4.4 GB | 8 GB | Alibaba, hỗ trợ tiếng Trung tốt |
+| `deepseek-r1` | 4.7 GB | 8 GB | Tốt cho reasoning/lập trình |
+| `codellama` | 3.8 GB | 8 GB | Chuyên cho code |
+
+> 💡 Xem thêm model tại: https://ollama.com/library
+
+---
+
+### 🔍 Đổi Model Embedding (cho Knowledge Base / RAG)
+
+Khi đổi model embedding, cần thực hiện **4 bước** theo thứ tự:
+
+#### Bước 1 — Pull model embedding mới
+
+```bash
+# Ví dụ đổi sang mxbai-embed-large
+ollama pull mxbai-embed-large
+```
+
+#### Bước 2 — Sửa `docker-compose.yml`
+
+Mở file `docker-compose.yml`, tìm phần `lobechat` → `environment`, sửa:
+
+```yaml
+# Ollama - Embedding
+EMBEDDING_MODEL_PROVIDER: "ollama"
+DEFAULT_EMBEDDING_MODEL: "mxbai-embed-large"    # ← đổi tên model ở đây
+```
+
+Tiếp theo, tìm phần `db-init` → `entrypoint`, sửa **vector dimension** cho phù hợp với model mới:
+
+```sql
+DELETE FROM embeddings WHERE vector_dims(embeddings) != 1024 OR embeddings IS NULL;
+ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(1024);
+```
+
+(Thay `1024` bằng dimension tương ứng của model, xem bảng bên dưới)
+
+#### Bước 3 — Xóa embeddings cũ và cập nhật vector dimension
+
+```bash
+# Xóa toàn bộ embeddings cũ (bắt buộc vì dimension khác nhau)
+docker exec lobe-postgres psql -U postgres -d lobechat -c "DELETE FROM embeddings;"
+
+# Cập nhật vector dimension (thay 1024 bằng dimension của model mới)
+docker exec lobe-postgres psql -U postgres -d lobechat -c "ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(1024);"
+```
+
+#### Bước 4 — Restart services
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+Sau đó vào LobeChat → Knowledge Base → upload lại file hoặc nhấn **Re-vectorize** để tạo embeddings mới.
+
+#### Bảng model Embedding phổ biến trên Ollama
+
+| Model | Vector Dimension | Kích thước | Ghi chú |
+|-------|:----------------:|-----------|---------|
+| `nomic-embed-text` | **768** | 274 MB | ✅ Model mặc định, cân bằng tốt |
+| `mxbai-embed-large` | **1024** | 670 MB | Chất lượng cao hơn |
+| `snowflake-arctic-embed` | **1024** | 670 MB | Tốt cho search |
+| `all-minilm` | **384** | 45 MB | Rất nhẹ, phù hợp máy yếu |
+| `bge-m3` | **1024** | 1.2 GB | Đa ngôn ngữ, tốt cho tiếng Việt |
+| `bge-large` | **1024** | 670 MB | BAAI, chất lượng cao |
+
+> ⚠️ **Quan trọng**: Mỗi model embedding có vector dimension khác nhau. Khi đổi model, **bắt buộc** phải cập nhật dimension trong database và xóa embeddings cũ, nếu không sẽ gặp lỗi.
+
+---
+
+### ☁️ Sử dụng Model AI từ Cloud (OpenAI, Google, v.v.)
+
+Ngoài Ollama (chạy local), bạn có thể dùng các API cloud:
+
+#### OpenAI (GPT-4, GPT-4o, ...)
+
+1. Lấy API key tại https://platform.openai.com/api-keys
+2. Sửa `docker-compose.yml`, phần `lobechat` → `environment`:
+
+```yaml
+OPENAI_API_KEY: "sk-xxxxxxxxxxxxxxxxxxxxxxxx"    # ← API key thật
+OPENAI_PROXY_URL: "https://api.openai.com/v1"    # ← URL chính thức của OpenAI
+```
+
+3. Restart:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+4. Trong LobeChat UI → Settings → Language Model → **OpenAI** → chọn model (gpt-4o, gpt-4o-mini, ...)
+
+#### OpenAI Embedding (thay thế Ollama embedding)
+
+Sửa `docker-compose.yml`:
+
+```yaml
+EMBEDDING_MODEL_PROVIDER: "openai"
+DEFAULT_EMBEDDING_MODEL: "text-embedding-3-small"
+OPENAI_API_KEY: "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+OPENAI_PROXY_URL: "https://api.openai.com/v1"
+```
+
+Dimension phổ biến cho OpenAI embedding:
+
+| Model | Vector Dimension |
+|-------|:----------------:|
+| `text-embedding-3-small` | **1536** |
+| `text-embedding-3-large` | **3072** |
+| `text-embedding-ada-002` | **1536** |
+
+Sau đó cập nhật dimension trong database và restart (tương tự Bước 3 & 4 ở trên).
+
+#### Google Gemini
+
+1. Lấy API key tại https://aistudio.google.com/apikey
+2. Trong LobeChat UI → Settings → Language Model → **Google** → nhập API key
+3. Chọn model (gemini-pro, gemini-1.5-pro, ...)
+
+#### Các provider khác
+
+LobeChat hỗ trợ nhiều provider khác có thể cấu hình trực tiếp trong UI:
+- **Anthropic** (Claude)
+- **Azure OpenAI**
+- **Groq**
+- **Perplexity**
+- **Mistral AI**
+- **Together AI**
+- **OpenRouter** (truy cập nhiều model qua 1 API)
+
+Vào Settings → Language Model → chọn provider → nhập API key tương ứng.
+
+---
+
+### 🌐 Sử dụng trên mạng LAN
 
 Thay `localhost` trong các biến `APP_URL`, `NEXTAUTH_URL`, redirect URIs bằng IP máy chủ.
 Cập nhật hosts file trên các máy client.
