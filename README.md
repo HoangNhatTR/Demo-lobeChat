@@ -1,15 +1,18 @@
 # LobeChat Self-Hosted (Docker + Ollama)
 
-## LobeChat là gì?
 
-**LobeChat** là một nền tảng chatbot AI mã nguồn mở, cung cấp giao diện web hiện đại để trò chuyện với các mô hình AI (GPT, LLaMA, Gemini,...). Phiên bản **self-hosted** này cho phép bạn:
+LobeChat là **nền tảng chat AI mã nguồn mở** (giống ChatGPT nhưng tự host), cho phép:
 
-- 🤖 **Chat với AI hoàn toàn offline** — sử dụng Ollama chạy LLM trên máy local, không cần API key hay kết nối internet
-- 📄 **Knowledge Base (RAG)** — upload tài liệu PDF/Word, AI sẽ đọc hiểu và trả lời câu hỏi dựa trên nội dung file
-- 🔍 **Vector Search** — tìm kiếm ngữ nghĩa trong tài liệu nhờ PostgreSQL + pgvector
-- 👥 **Đa người dùng** — hỗ trợ đăng ký/đăng nhập qua Logto (SSO), mỗi người có dữ liệu riêng
-- 📎 **Upload & lưu trữ file** — lưu file đính kèm qua MinIO (S3-compatible)
-- 🧩 **Hỗ trợ plugin** — mở rộng khả năng AI với các plugin (tìm kiếm web, vẽ ảnh, v.v.)
+* **Chat với AI** — dùng bất kỳ model nào (Ollama local, OpenAI, Claude, Gemini...) qua giao diện web đẹp
+* **Knowledge Base (RAG)** — upload PDF/Word/TXT, AI đọc hiểu nội dung và trả lời dựa trên tài liệu của bạn
+* **Multi-model** — dùng nhiều model cùng lúc, so sánh kết quả, chọn model phù hợp cho từng task
+* **Plugin system** — mở rộng khả năng AI (tìm kiếm web, vẽ ảnh, chạy code, gọi API...)
+* **Đa người dùng** — mỗi người có tài khoản riêng, dữ liệu riêng, lịch sử chat riêng
+* **Tạo Assistant tùy chỉnh** — thiết kế chatbot với system prompt riêng, gắn tool/plugin riêng, gắn Knowledge Base riêng
+
+ **Tóm lại** : LobeChat hẫu trợ UI cho người dùng sử các model AI khác nhau hoặc sử dụng với tài liệu cá nhân
+
+**LobeChat là "chat UI", không phải "agent framework"** . Mỗi assistant trong LobeChat hoạt động  **độc lập** , người dùng phải chủ động chọn và nói chuyện với từng assistant.
 
 Bộ cài đặt LobeChat Database edition chạy trên máy local với:
 
@@ -184,16 +187,16 @@ Sau khi pull xong, vào LobeChat UI → Settings → Language Model → Ollama, 
 
 #### Một số model LLM phổ biến trên Ollama
 
-| Model | Kích thước | RAM tối thiểu | Ghi chú |
-|-------|-----------|---------------|---------|
-| `llama3.1` | 4.7 GB | 8 GB | Model mặc định, cân bằng tốc độ/chất lượng |
-| `llama3.1:70b` | 40 GB | 48 GB | Chất lượng cao, cần GPU mạnh |
-| `gemma2` | 5.4 GB | 8 GB | Google, tốt cho tiếng Anh |
-| `mistral` | 4.1 GB | 8 GB | Nhanh, nhẹ |
-| `phi3` | 2.2 GB | 4 GB | Microsoft, rất nhẹ |
-| `qwen2` | 4.4 GB | 8 GB | Alibaba, hỗ trợ tiếng Trung tốt |
-| `deepseek-r1` | 4.7 GB | 8 GB | Tốt cho reasoning/lập trình |
-| `codellama` | 3.8 GB | 8 GB | Chuyên cho code |
+| Model            | Kích thước | RAM tối thiểu | Ghi chú                                              |
+| ---------------- | ------------- | --------------- | ----------------------------------------------------- |
+| `llama3.1`     | 4.7 GB        | 8 GB            | Model mặc định, cân bằng tốc độ/chất lượng |
+| `llama3.1:70b` | 40 GB         | 48 GB           | Chất lượng cao, cần GPU mạnh                     |
+| `gemma2`       | 5.4 GB        | 8 GB            | Google, tốt cho tiếng Anh                           |
+| `mistral`      | 4.1 GB        | 8 GB            | Nhanh, nhẹ                                           |
+| `phi3`         | 2.2 GB        | 4 GB            | Microsoft, rất nhẹ                                  |
+| `qwen2`        | 4.4 GB        | 8 GB            | Alibaba, hỗ trợ tiếng Trung tốt                   |
+| `deepseek-r1`  | 4.7 GB        | 8 GB            | Tốt cho reasoning/lập trình                        |
+| `codellama`    | 3.8 GB        | 8 GB            | Chuyên cho code                                      |
 
 > 💡 Xem thêm model tại: https://ollama.com/library
 
@@ -249,14 +252,14 @@ Sau đó vào LobeChat → Knowledge Base → upload lại file hoặc nhấn **
 
 #### Bảng model Embedding phổ biến trên Ollama
 
-| Model | Vector Dimension | Kích thước | Ghi chú |
-|-------|:----------------:|-----------|---------|
-| `nomic-embed-text` | **768** | 274 MB | Cân bằng tốt |
-| `mxbai-embed-large` | **1024** | 670 MB | Chất lượng cao hơn |
-| `snowflake-arctic-embed` | **1024** | 670 MB | Tốt cho search |
-| `all-minilm` | **384** | 45 MB | Rất nhẹ, phù hợp máy yếu |
-| `bge-m3` | **1024** | 1.2 GB | ✅ Model mặc định, đa ngôn ngữ, tốt cho tiếng Việt |
-| `bge-large` | **1024** | 670 MB | BAAI, chất lượng cao |
+| Model                      | Vector Dimension | Kích thước | Ghi chú                                                    |
+| -------------------------- | :--------------: | ------------- | ----------------------------------------------------------- |
+| `nomic-embed-text`       |  **768**  | 274 MB        | Cân bằng tốt                                             |
+| `mxbai-embed-large`      |  **1024**  | 670 MB        | Chất lượng cao hơn                                      |
+| `snowflake-arctic-embed` |  **1024**  | 670 MB        | Tốt cho search                                             |
+| `all-minilm`             |  **384**  | 45 MB         | Rất nhẹ, phù hợp máy yếu                              |
+| `bge-m3`                 |  **1024**  | 1.2 GB        | ✅ Model mặc định, đa ngôn ngữ, tốt cho tiếng Việt |
+| `bge-large`              |  **1024**  | 670 MB        | BAAI, chất lượng cao                                     |
 
 > ⚠️ **Quan trọng**: Mỗi model embedding có vector dimension khác nhau. Khi đổi model, **bắt buộc** phải cập nhật dimension trong database và xóa embeddings cũ, nếu không sẽ gặp lỗi.
 
@@ -298,11 +301,11 @@ OPENAI_PROXY_URL: "https://api.openai.com/v1"
 
 Dimension phổ biến cho OpenAI embedding:
 
-| Model | Vector Dimension |
-|-------|:----------------:|
-| `text-embedding-3-small` | **1536** |
-| `text-embedding-3-large` | **3072** |
-| `text-embedding-ada-002` | **1536** |
+| Model                      | Vector Dimension |
+| -------------------------- | :--------------: |
+| `text-embedding-3-small` |  **1536**  |
+| `text-embedding-3-large` |  **3072**  |
+| `text-embedding-ada-002` |  **1536**  |
 
 Sau đó cập nhật dimension trong database và restart (tương tự Bước 3 & 4 ở trên).
 
@@ -315,6 +318,7 @@ Sau đó cập nhật dimension trong database và restart (tương tự Bước
 #### Các provider khác
 
 LobeChat hỗ trợ nhiều provider khác có thể cấu hình trực tiếp trong UI:
+
 - **Anthropic** (Claude)
 - **Azure OpenAI**
 - **Groq**
@@ -327,7 +331,220 @@ Vào Settings → Language Model → chọn provider → nhập API key tương 
 
 ---
 
-### 🌐 Sử dụng trên mạng LAN
+### 🌐 Hướng dẫn cấu hình Ollama: Local vs Mạng LAN
 
-Thay `localhost` trong các biến `APP_URL`, `NEXTAUTH_URL`, redirect URIs bằng IP máy chủ.
-Cập nhật hosts file trên các máy client.
+Dự án hỗ trợ 2 chế độ kết nối Ollama:
+
+| Chế độ               | Mô tả                                            | OLLAMA_PROXY_URL                      |
+| ----------------------- | -------------------------------------------------- | ------------------------------------- |
+| **Local**         | Ollama chạy trên cùng máy với Docker          | `http://host.docker.internal:11434` |
+| **Network (LAN)** | Ollama chạy trên máy khác trong mạng nội bộ | `http://<IP_MÁY_OLLAMA>:11434`     |
+
+---
+
+#### Chế độ 1: Ollama chạy LOCAL (cùng máy với Docker)
+
+> Dùng khi bạn cài Docker Desktop + Ollama **trên cùng một máy tính**.
+
+##### Bước 1 — Cài đặt Ollama trên máy local
+
+1. Tải và cài Ollama: https://ollama.com/download
+2. Pull model cần thiết:
+
+```bash
+ollama pull bge-m3
+ollama pull llama3.1
+ollama create text-embedding-3-small -f Modelfile-embedding
+```
+
+3. Kiểm tra Ollama đang chạy:
+
+```bash
+ollama list
+# Hoặc thử gọi API
+curl http://localhost:11434/api/tags
+```
+
+##### Bước 2 — Cấu hình `docker-compose.yml`
+
+Mở `docker-compose.yml`, tìm phần `lobechat` → `environment`, sửa thành:
+
+```yaml
+      # Ollama - LLM
+      ENABLED_OLLAMA: "1"
+      OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
+
+      # Ollama - Embedding
+      DEFAULT_FILES_CONFIG: "embedding_model=ollama/bge-m3"
+
+      # OpenAI proxy -> Ollama
+      OPENAI_API_KEY: "ollama"
+      OPENAI_PROXY_URL: "http://host.docker.internal:11434/v1"
+```
+
+> 💡 `host.docker.internal` là DNS đặc biệt của Docker Desktop, cho phép container truy cập vào services trên máy host (Windows/macOS). Trên Linux, xem ghi chú bên dưới.
+
+##### Bước 3 — Thêm hosts & Khởi động
+
+```bash
+# Thêm hosts (chạy as Administrator trên Windows)
+# Mở C:\Windows\System32\drivers\etc\hosts, thêm:
+# 127.0.0.1 logto
+# 127.0.0.1 minio
+
+# Khởi động
+docker compose up -d
+```
+
+##### Ghi chú cho Linux
+
+Trên Linux, `host.docker.internal` có thể không hoạt động mặc định. Thêm `extra_hosts` vào service `lobechat` trong `docker-compose.yml`:
+
+```yaml
+  lobechat:
+    image: lobehub/lobe-chat-database:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # ... (giữ nguyên phần còn lại)
+```
+
+Hoặc đơn giản hơn, sử dụng `--network host` hoặc dùng IP máy (xem Chế độ 2).
+
+---
+
+#### Chế độ 2: Ollama chạy trên MÁY KHÁC trong mạng LAN
+
+> Dùng khi Ollama chạy trên một máy riêng , còn Docker LobeChat chạy trên máy khác.
+
+##### Bước 1 — Cấu hình `docker-compose.yml` trên MÁY A
+
+Mở `docker-compose.yml`, tìm phần `lobechat` → `environment`, sửa thành:
+
+```yaml
+      # Ollama - LLM (thay IP bằng IP thực của máy chạy Ollama)
+      ENABLED_OLLAMA: "1"
+      OLLAMA_PROXY_URL: "http://192.168.x.20:11434"
+
+      # Ollama - Embedding
+      DEFAULT_FILES_CONFIG: "embedding_model=ollama/bge-m3"
+
+      # OpenAI proxy -> Ollama
+      OPENAI_API_KEY: "ollama"
+      OPENAI_PROXY_URL: "http://192.168.x.20:11434/v1"
+```
+
+> ⚠️ Thay `192.168.x.20` bằng **IP thực** của máy chạy Ollama. Tìm IP bằng lệnh `ipconfig` (Windows) hoặc `ip addr` (Linux).
+
+##### Bước 2 — Thêm hosts & Khởi động trên MÁY A
+
+```bash
+# Thêm hosts (chạy as Administrator trên Windows)
+# Mở C:\Windows\System32\drivers\etc\hosts, thêm:
+# 127.0.0.1 logto
+# 127.0.0.1 minio
+
+# Khởi động
+docker compose up -d
+```
+
+##### Bước 3 — Kiểm tra kết nối
+
+```bash
+# Xem logs LobeChat
+docker logs lobe-chat --tail 30
+
+# Test gọi Ollama từ trong container
+docker exec lobe-chat curl -s http://192.168.x.20:11434/api/tags
+```
+
+---
+
+#### So sánh 2 chế độ
+
+|                              | Local (`host.docker.internal`)                    | Network (IP LAN)                                      |
+| ---------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| **Ưu điểm**         | Đơn giản, chỉ cần 1 máy                       | Tận dụng GPU máy mạnh, nhiều người dùng chung |
+| **Nhược điểm**     | Máy cần đủ mạnh để chạy cả Docker + Ollama | Cần cấu hình mạng, firewall                       |
+| **Phù hợp**          | Cá nhân, demo, dev                                | Team, production, máy GPU riêng                     |
+| **Cần firewall rule** | Không                                              | Có (mở port 11434 trên máy Ollama)                |
+
+---
+
+#### Khắc phục lỗi kết nối Ollama
+
+| Triệu chứng                  | Nguyên nhân                    | Cách sửa                                           |
+| ------------------------------ | -------------------------------- | ---------------------------------------------------- |
+| `connection refused` (local) | Ollama chưa chạy               | Mở app Ollama hoặc chạy `ollama serve`          |
+| `connection refused` (LAN)   | Ollama chỉ listen localhost     | Đặt `OLLAMA_HOST=0.0.0.0` rồi restart Ollama    |
+| `connection refused` (LAN)   | Firewall chặn port              | Mở port 11434 trên firewall máy Ollama            |
+| `timeout` (LAN)              | Sai IP hoặc không cùng subnet | Kiểm tra `ping <IP_OLLAMA>` từ máy Docker       |
+| `model not found`            | Chưa pull model                 | Chạy `ollama pull <tên_model>` trên máy Ollama |
+| Embedding lỗi dimension       | Model embedding khác dimension  | Xem mục "Đổi Model Embedding" ở trên            |
+
+**Kiểm tra nhanh kết nối:**
+
+```bash
+# Từ máy Docker host
+curl http://<IP_OLLAMA>:11434/api/tags
+
+# Từ bên trong container LobeChat
+docker exec lobe-chat curl -s http://<IP_OLLAMA>:11434/api/tags
+```
+
+---
+
+### 🌐 Cho phép truy cập LobeChat từ mạng LAN
+
+Mặc định LobeChat chỉ truy cập được từ `http://localhost:3210`. Để các máy khác trong LAN cũng truy cập được:
+
+##### Bước 1 — Sửa `docker-compose.yml`
+
+Thay `localhost` bằng **IP máy chạy Docker**:
+
+```yaml
+      APP_URL: "http://192.168.x.10:3210"
+      NEXTAUTH_URL: "http://192.168.x.10:3210/api/auth"
+```
+
+##### Bước 2 — Sửa `init-logto.sql`
+
+Cập nhật redirect URI:
+
+```sql
+'{"redirectUris":["http://192.168.x.10:3210/api/auth/callback/logto"],"postLogoutRedirectUris":["http://192.168.x.10:3210/"]}'
+```
+
+##### Bước 3 — Cập nhật Logto endpoint
+
+Trong `docker-compose.yml`, phần `logto` → `environment`:
+
+```yaml
+      ENDPOINT: "http://192.168.x.10:3002"
+      ADMIN_ENDPOINT: "http://192.168.x.10:3001"
+```
+
+Và phần `lobechat` → `environment`:
+
+```yaml
+      AUTH_LOGTO_ISSUER: "http://192.168.x.10:3002/oidc"
+```
+
+##### Bước 4 — Cập nhật hosts trên MÁY CLIENT
+
+Trên mỗi máy muốn truy cập, thêm vào hosts file:
+
+```
+192.168.x.10 logto
+192.168.x.10 minio
+```
+
+##### Bước 5 — Restart
+
+```bash
+docker compose down
+docker compose up -d
+# Chạy lại init-logto nếu đã đổi redirect URI
+docker compose up -d logto-init
+```
+
+Sau đó truy cập `http://192.168.x.10:3210` từ các máy trong LAN.
