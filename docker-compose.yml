@@ -209,6 +209,26 @@ services:
         "
         echo "Database fix complete!"
 
+  # ============================================================
+  #  MCP Server - GitLab
+  #  Expose GitLab MCP server via SSE for LobeChat
+  # ============================================================
+  mcp-gitlab:
+    image: node:20-alpine
+    container_name: mcp-gitlab
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      GITLAB_PERSONAL_ACCESS_TOKEN: "${GITLAB_TOKEN:-glpat-xxxxxxxxxxxxxxxxxxxx}"
+      GITLAB_API_URL: "${GITLAB_API_URL:-https://gitlab.com/api/v4}"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        npm install -g supergateway @modelcontextprotocol/server-gitlab &&
+        npx supergateway --stdio "mcp-server-gitlab" --port 3100 --host 0.0.0.0 --cors --outputTransport streamableHttp --healthEndpoint /healthz
+
 volumes:
   postgres_data:
   minio_data:
