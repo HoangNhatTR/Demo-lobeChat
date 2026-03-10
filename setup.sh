@@ -32,7 +32,7 @@ echo "[OK] Ollama found"
 echo ""
 echo "[STEP] Pulling Ollama models..."
 ollama pull bge-m3
-ollama pull llama3.1
+# ollama pull llama3.1
 
 # --- Step 4: Add hosts entries ---
 echo ""
