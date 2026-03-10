@@ -35,7 +35,7 @@ REM --- Step 3: Pull Ollama models ---
 echo.
 echo [STEP] Pulling Ollama models...
 ollama pull bge-m3
-ollama pull llama3.1
+REM ollama pull llama3.1 - user ollama pull gemini-1.5-pro - user ollama pull gemini-2.0-pro
 
 REM --- Step 4: Add hosts entries ---
 echo.
