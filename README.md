@@ -40,6 +40,12 @@ lobechat/
 ├── setup.bat               # Script cài đặt tự động (Windows)
 ├── setup.sh                # Script cài đặt tự động (Linux/macOS)
 ├── Modelfile-embedding     # Alias model embedding cho Ollama
+├── .env.example            # Mẫu biến môi trường (GitLab token, ...)
+├── gitlab-toolserver/      # GitLab Tool Server (LobeChat Plugin)
+│   ├── index.js
+│   ├── package.json
+│   ├── Dockerfile
+│   └── .dockerignore
 └── README.md               # File này
 ```
 
@@ -107,6 +113,7 @@ sudo ./setup.sh
 | Dịch vụ          | URL                                                |
 | ------------------ | -------------------------------------------------- |
 | **LobeChat** | http://localhost:3210                              |
+| GitLab Tool Server | http://localhost:3101                              |
 | MinIO Console      | http://localhost:9001 (minioadmin / minioadmin123) |
 | Logto Admin        | http://localhost:3001                              |
 
@@ -548,3 +555,109 @@ docker compose up -d logto-init
 ```
 
 Sau đó truy cập `http://192.168.x.10:3210` từ các máy trong LAN.
+
+---
+
+### 🦊 Tích hợp GitLab vào LobeChat (API + Tool Server)
+
+GitLab Tool Server là một HTTP server wrap GitLab REST API thành các tool mà LobeChat có thể gọi thông qua plugin system (OpenAPI). Cho phép AI trong LobeChat:
+
+- Liệt kê / tìm kiếm project
+- Xem / tạo issue
+- Liệt kê / xem merge request + diff changes
+- Liệt kê branches
+- Đọc nội dung file trong repo
+- Xem pipeline status + jobs
+- Tìm kiếm code toàn bộ GitLab
+
+#### Bước 1 — Tạo GitLab Personal Access Token
+
+1. Truy cập GitLab → **Settings** → **Access Tokens**
+   - gitlab.com: https://gitlab.com/-/user_settings/personal_access_tokens
+   - Self-hosted: `https://your-gitlab.example.com/-/user_settings/personal_access_tokens`
+2. Tạo token với scopes: **api**, **read_api**, **read_repository**
+3. Copy token (dạng `glpat-...`)
+
+#### Bước 2 — Cấu hình biến môi trường
+
+Tạo file `.env` trong thư mục dự án (cùng cấp `docker-compose.yml`):
+
+```env
+GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+GITLAB_API_URL=https://gitlab.com/api/v4
+```
+
+> Nếu dùng GitLab self-hosted, đổi URL thành: `https://your-gitlab.example.com/api/v4`
+
+#### Bước 3 — Khởi động Tool Server
+
+```bash
+docker compose up -d gitlab-toolserver
+```
+
+Kiểm tra hoạt động:
+
+```bash
+# Health check
+curl http://localhost:3101/healthz
+
+# Xem plugin manifest
+curl http://localhost:3101/.well-known/ai-plugin.json
+
+# Xem OpenAPI spec
+curl http://localhost:3101/openapi.json
+
+# Test: list projects
+curl http://localhost:3101/api/projects?owned=true
+```
+
+#### Bước 4 — Thêm Plugin vào LobeChat
+
+1. Mở **LobeChat** → **Settings** (biểu tượng bánh răng)
+2. Vào tab **Plugin Settings** → **Custom Plugin**
+3. Nhập URL manifest: `http://gitlab-toolserver:3101/.well-known/ai-plugin.json`
+4. LobeChat sẽ tự phát hiện các tool từ OpenAPI spec
+5. Nhấn **Save**
+
+> **Lưu ý**: Dùng `gitlab-toolserver` (tên container) thay vì `localhost` vì LobeChat chạy trong Docker cùng network.
+
+#### Bước 5 — Sử dụng trong Chat
+
+Khi chat, AI có thể tự động gọi các GitLab tool. Ví dụ:
+
+- *"Liệt kê các project của tôi trên GitLab"*
+- *"Cho tôi xem các issue đang mở của project X"*
+- *"Tạo issue mới cho project ABC với title là 'Fix login bug'"*
+- *"Xem các merge request đang chờ review"*
+- *"Kiểm tra trạng thái pipeline mới nhất"*
+- *"Đọc file README.md trong project Y"*
+- *"Tìm đoạn code có chứa 'authentication' trong GitLab"*
+
+#### Danh sách Tool có sẵn
+
+| Tool                     | Mô tả                                   |
+| ------------------------ | ----------------------------------------- |
+| `listProjects`         | Liệt kê / tìm kiếm project             |
+| `getProject`           | Xem chi tiết project                     |
+| `listIssues`           | Liệt kê issue của project               |
+| `getIssue`             | Xem chi tiết 1 issue                     |
+| `createIssue`          | Tạo issue mới                            |
+| `listMergeRequests`    | Liệt kê merge request                    |
+| `getMergeRequest`      | Xem chi tiết MR                          |
+| `getMergeRequestChanges` | Xem diff/changes của MR               |
+| `listBranches`         | Liệt kê branches                         |
+| `getFileContent`       | Đọc nội dung file trong repo            |
+| `listPipelines`        | Liệt kê pipelines                       |
+| `getPipeline`          | Xem chi tiết pipeline                    |
+| `listPipelineJobs`     | Xem danh sách jobs trong pipeline        |
+| `searchCode`           | Tìm kiếm code/issues/MR toàn bộ GitLab |
+
+#### Cấu trúc file GitLab Tool Server
+
+```
+gitlab-toolserver/
+├── index.js          # Express server + GitLab API routes
+├── package.json      # Dependencies
+├── Dockerfile        # Container build
+└── .dockerignore
+```
