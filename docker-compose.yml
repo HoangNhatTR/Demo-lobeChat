@@ -1,0 +1,325 @@
+services:
+
+  postgresql:
+    image: pgvector/pgvector:pg16
+    container_name: lobe-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: lobechat
+      POSTGRES_PASSWORD: lobechat123
+      POSTGRES_USER: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lobechat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  logto:
+    image: svhd/logto:latest
+    container_name: lobe-logto
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      TRUST_PROXY_HEADER: "1"
+      DB_URL: "postgresql://postgres:lobechat123@postgresql:5432/logto"
+      ENDPOINT: "http://logto:3002"
+      ADMIN_ENDPOINT: "http://logto:3001"
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+
+  logto-init:
+    image: pgvector/pgvector:pg16
+    container_name: lobe-logto-init
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      logto:
+        condition: service_started
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for Logto schema..."
+        for i in $$(seq 1 30); do
+          if psql -U postgres -h postgresql -d logto -tc "SELECT 1 FROM information_schema.tables WHERE table_name = 'applications'" 2>/dev/null | grep -q 1; then
+            echo "Logto schema ready!"
+            break
+          fi
+          echo "  Waiting... ($$i/30)"
+          sleep 2
+        done
+        echo "Inserting LobeChat app..."
+        psql -U postgres -h postgresql -d logto -f /tmp/init-logto.sql
+        echo "Done!"
+    environment:
+      PGPASSWORD: "lobechat123"
+    volumes:
+      - ./init-logto.sql:/tmp/init-logto.sql:ro
+
+  minio:
+    image: minio/minio:latest
+    container_name: lobe-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: lobe-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      mc mb --ignore-existing myminio/lobe;
+      mc anonymous set public myminio/lobe;
+      echo 'Bucket lobe created!';
+      "
+
+  lobechat:
+    image: lobehub/lobe-chat-database:latest
+    container_name: lobe-chat
+    restart: unless-stopped
+    ports:
+      - "3210:3210"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      logto:
+        condition: service_started
+    environment:
+      # URL
+      APP_URL: "http://localhost:3210"
+      NEXTAUTH_URL: "http://localhost:3210/api/auth"
+
+      # Database
+      DATABASE_URL: "postgresql://postgres:lobechat123@postgresql:5432/lobechat"
+      KEY_VAULTS_SECRET: "lobechat-secret-key-windows-2025!!"
+
+      NEXT_AUTH_SECRET: "nextauth-secret-key-windows-2025!!"
+
+      # Logto SSO Auth (cần cập nhật CLIENT_ID và CLIENT_SECRET sau khi cấu hình Logto)
+      NEXT_AUTH_SSO_PROVIDERS: "logto"
+      AUTH_LOGTO_ID: "lobechat-app"
+      AUTH_LOGTO_SECRET: "kLPFa3mSfYhBQ4AgwdvuXTDGzb9cVp0K"
+      AUTH_LOGTO_ISSUER: "http://logto:3002/oidc"
+      LOGTO_WEBHOOK_SIGNING_KEY: "logto-webhook-key-2025"
+
+      # MinIO / S3
+      S3_ENDPOINT: "http://minio:9000"
+      S3_BUCKET: "lobe"
+      S3_ACCESS_KEY_ID: "minioadmin"
+      S3_SECRET_ACCESS_KEY: "minioadmin123"
+      S3_PUBLIC_DOMAIN: "http://minio:9000"
+      S3_ENABLE_PATH_STYLE: "1"
+
+      # Allow plugin calls to internal Docker services (bypass SSRF protection)
+      SSRF_ALLOW_PRIVATE_IP_ADDRESS: "1"
+
+      # Ollama - LLM
+      ENABLED_OLLAMA: "1"
+      # OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
+      OLLAMA_PROXY_URL: "http://192.168.3.7:11434"
+
+      # Ollama - Embedding (format: embedding_model=provider/model)
+      DEFAULT_FILES_CONFIG: "embedding_model=ollama/bge-m3"
+
+      # OpenAI proxy -> Ollama (nếu cần dùng OpenAI provider trong UI)
+      OPENAI_API_KEY: "ollama"
+      OPENAI_PROXY_URL: "http://192.168.3.7:11434/v1"
+
+  db-init:
+    image: pgvector/pgvector:pg16
+    container_name: lobe-db-init
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      lobechat:
+        condition: service_started
+    restart: "no"
+    environment:
+      PGPASSWORD: "lobechat123"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for LobeChat to create embeddings table..."
+        for i in $$(seq 1 90); do
+          if psql -U postgres -h postgresql -d lobechat -tc "SELECT 1 FROM information_schema.tables WHERE table_name = 'embeddings'" 2>/dev/null | grep -q 1; then
+            echo "Embeddings table found!"
+            break
+          fi
+          if [ $$i -eq 90 ]; then
+            echo "Timeout waiting for embeddings table. Will fix on next restart."
+            exit 0
+          fi
+          echo "  Waiting... ($$i/90)"
+          sleep 2
+        done
+        echo "Fixing vector dimension to 1024 for bge-m3..."
+        psql -U postgres -h postgresql -d lobechat -c "
+        DO \$$\$$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'embeddings' AND column_name = 'embeddings'
+            AND udt_name = 'vector'
+          ) THEN
+            DELETE FROM embeddings WHERE vector_dims(embeddings) != 1024 OR embeddings IS NULL;
+            ALTER TABLE embeddings ALTER COLUMN embeddings TYPE vector(1024);
+            RAISE NOTICE 'Embeddings column set to vector(1024)';
+          END IF;
+        END \$$\$$;
+        "
+        echo "Fixing similarity column type..."
+        psql -U postgres -h postgresql -d lobechat -c "
+        DO \$$\$$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'message_query_chunks' AND column_name = 'similarity'
+            AND data_type = 'numeric'
+          ) THEN
+            ALTER TABLE message_query_chunks ALTER COLUMN similarity TYPE double precision;
+            RAISE NOTICE 'Similarity column changed to double precision';
+          END IF;
+        END \$$\$$;
+        "
+        echo "Database fix complete!"
+
+  # ============================================================
+  #  GitLab Tool Server (LobeChat Plugin — OpenAPI)
+  #  Wraps GitLab REST API as LobeChat-compatible tools
+  # ============================================================
+  gitlab-toolserver:
+    build: ./gitlab-toolserver
+    container_name: gitlab-toolserver
+    restart: unless-stopped
+    ports:
+      - "3101:3101"
+    environment:
+      PORT: "3101"
+      GITLAB_PERSONAL_ACCESS_TOKEN: "${GITLAB_TOKEN:-glpat-xxxxxxxxxxxxxxxxxxxx}"
+      GITLAB_API_URL: "${GITLAB_API_URL:-https://gitlab.com/api/v4}"
+      # Set PUBLIC_URL to your ngrok or public domain (used for absolute manifest/openapi URLs)
+      PUBLIC_URL: "${PUBLIC_URL:-http://gitlab-toolserver:3101}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3101/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  #  GitLab Tool Server 2 (Instance khác — ví dụ self-hosted)
+  #  Bỏ comment và đổi token/URL để dùng
+  # ============================================================
+  gitlab-toolserver-2:
+    build: ./gitlab-toolserver
+    container_name: gitlab-toolserver-2
+    restart: unless-stopped
+    ports:
+      - "3102:3102"
+    environment:
+      PORT: "3102"
+      GITLAB_PERSONAL_ACCESS_TOKEN: "${GITLAB_TOKEN_2:-glpat-xxxxxxxxxxxxxxxxxxxx}"
+      GITLAB_API_URL: "${GITLAB_API_URL_2:-http://192.168.3.7:8888/api/v4}"
+      PUBLIC_URL: "http://gitlab-toolserver-2:3102"
+      PLUGIN_NAME: "gitlab-local"
+      PLUGIN_LABEL: "GitLab Local"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3102/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  #  Jira Tool Server (LobeChat Plugin — OpenAPI)
+  #  Wraps Jira REST API as LobeChat-compatible tools
+  # ============================================================
+  jira-toolserver:
+    build: ./jira-toolserver
+    container_name: jira-toolserver
+    restart: unless-stopped
+    ports:
+      - "3103:3103"
+    environment:
+      PORT: "3103"
+      JIRA_BASE_URL: "${JIRA_BASE_URL:-https://your-domain.atlassian.net}"
+      JIRA_EMAIL: "${JIRA_EMAIL:-your-email@example.com}"
+      JIRA_API_TOKEN: "${JIRA_API_TOKEN:-your-jira-api-token}"
+      PUBLIC_URL: "${JIRA_PUBLIC_URL:-http://jira-toolserver:3103}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3103/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  #  Confluence Tool Server (LobeChat Plugin — OpenAPI)
+  #  Wraps Confluence REST API as LobeChat-compatible tools
+  # ============================================================
+  confluence-toolserver:
+    build: ./confluence-toolserver
+    container_name: confluence-toolserver
+    restart: unless-stopped
+    ports:
+      - "3104:3104"
+    environment:
+      PORT: "3104"
+      CONFLUENCE_BASE_URL: "${CONFLUENCE_BASE_URL:-https://your-domain.atlassian.net}"
+      CONFLUENCE_EMAIL: "${CONFLUENCE_EMAIL:-your-email@example.com}"
+      CONFLUENCE_API_TOKEN: "${CONFLUENCE_API_TOKEN:-your-confluence-token}"
+      PUBLIC_URL: "${CONFLUENCE_PUBLIC_URL:-http://confluence-toolserver:3104}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3104/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  #  MCP Server - GitLab (Streamable HTTP for LobeChat MCP Plugin)
+  # ============================================================
+  mcp-gitlab:
+    image: node:20-alpine
+    container_name: mcp-gitlab
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    environment:
+      GITLAB_PERSONAL_ACCESS_TOKEN: "${GITLAB_TOKEN:-glpat-xxxxxxxxxxxxxxxxxxxx}"
+      GITLAB_API_URL: "${GITLAB_API_URL:-https://gitlab.com/api/v4}"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        npm install -g supergateway @modelcontextprotocol/server-gitlab &&
+        npx supergateway --stdio "mcp-server-gitlab" --port 3100 --host 0.0.0.0 --cors --outputTransport streamableHttp --healthEndpoint /healthz
+
+volumes:
+  postgres_data:
+  minio_data:
