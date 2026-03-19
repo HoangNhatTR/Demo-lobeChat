@@ -143,15 +143,19 @@ services:
 
       # Ollama - LLM
       ENABLED_OLLAMA: "1"
-      # OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
-      OLLAMA_PROXY_URL: "http://192.168.3.7:11434"
+      OLLAMA_PROXY_URL: "http://host.docker.internal:11434"
 
       # Ollama - Embedding (format: embedding_model=provider/model)
       DEFAULT_FILES_CONFIG: "embedding_model=ollama/bge-m3"
 
       # OpenAI proxy -> Ollama (nếu cần dùng OpenAI provider trong UI)
       OPENAI_API_KEY: "ollama"
-      OPENAI_PROXY_URL: "http://192.168.3.7:11434/v1"
+      OPENAI_PROXY_URL: "http://host.docker.internal:11434/v1"
+
+      # OpenRouter - cho model hỗ trợ function calling (dùng với MetaGPT plugin)
+      ENABLED_OPENROUTER: "1"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      OPENROUTER_MODEL_LIST: "anthropic/claude-sonnet-4-20250514,google/gemini-2.0-flash-001,deepseek/deepseek-chat-v3-0324"
 
   db-init:
     image: pgvector/pgvector:pg16
@@ -297,6 +301,39 @@ services:
       PUBLIC_URL: "${CONFLUENCE_PUBLIC_URL:-http://confluence-toolserver:3104}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3104/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  #  MetaGPT Multi-Agent Orchestrator (LobeChat Plugin — OpenAPI)
+  #  Simulates a software dev team: PM, Architect, Engineer, QA
+  # ============================================================
+  metagpt-toolserver:
+    build: ./metagpt-toolserver
+    container_name: metagpt-toolserver
+    restart: unless-stopped
+    ports:
+      - "3105:3105"
+    volumes:
+      - ./metagpt-output:/output
+    environment:
+      PORT: "3105"
+      # LLM API endpoint (OpenAI-compatible — Ollama, OpenAI, etc.)
+      LLM_API_URL: "${METAGPT_LLM_API_URL:-http://192.168.3.7:11434/v1/chat/completions}"
+      LLM_API_KEY: "${METAGPT_LLM_API_KEY:-ollama}"
+      LLM_MODEL: "${METAGPT_LLM_MODEL:-qwen3.5:latest}"
+      LLM_TEMPERATURE: "${METAGPT_LLM_TEMPERATURE:-0.7}"
+      LLM_MAX_TOKENS: "${METAGPT_LLM_MAX_TOKENS:-8192}"
+      # Per-agent model overrides (optional — uses LLM_MODEL if not set)
+      LLM_MODEL_PM: "${METAGPT_LLM_MODEL_PM:-}"
+      LLM_MODEL_ARCHITECT: "${METAGPT_LLM_MODEL_ARCHITECT:-}"
+      LLM_MODEL_ENGINEER: "${METAGPT_LLM_MODEL_ENGINEER:-deepseek-coder-v2:latest}"
+      LLM_MODEL_QA: "${METAGPT_LLM_MODEL_QA:-}"
+      PUBLIC_URL: "${METAGPT_PUBLIC_URL:-http://localhost:3105}"
+      INTERNAL_URL: "http://metagpt-toolserver:3105"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3105/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5

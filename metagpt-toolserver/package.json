@@ -1,0 +1,13 @@
+{
+  "name": "metagpt-toolserver",
+  "version": "1.0.0",
+  "description": "MetaGPT Multi-Agent Orchestrator for LobeChat — simulates a software team with PM, Architect, Engineer, QA roles",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  }
+}
